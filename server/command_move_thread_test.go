@@ -145,11 +145,11 @@ func TestSortedPostsFromPostList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%d messages", tt.count), func(t *testing.T) {
 			postList := mockGeneratePostList(tt.count, model.NewId(), false)
-			sortedPosts := sortedPostsFromPostList(postList)
+			wpl := sortedPostsFromPostList(postList)
 
-			require.Equal(t, len(postList.Posts), len(sortedPosts))
-			if len(sortedPosts) > 0 {
-				for _, post := range sortedPosts {
+			require.Equal(t, len(postList.Posts), wpl.NumPosts())
+			if wpl.NumPosts() > 0 {
+				for _, post := range wpl.Posts {
 					assert.NotNil(t, postList.Posts[post.Id])
 				}
 			}

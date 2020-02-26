@@ -52,18 +52,18 @@ func (p *Plugin) runMoveThreadCommand(args []string, extra *model.CommandArgs) (
 	if appErr != nil {
 		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Error: unable to get post with ID %s; ensure this is correct", postID)), true, nil
 	}
-	postList := sortedPostsFromPostList(postListResponse)
+	wpl := sortedPostsFromPostList(postListResponse)
 
 	// Validation: let's check a few things before moving any posts.
-	if len(postList) == 0 {
+	if wpl.NumPosts() == 0 {
 		return nil, false, fmt.Errorf("Sorting the post list response for post %s resulted in no posts", postID)
 	}
 
-	if config.MaxThreadCountMoveSizeInt() != 0 && config.MaxThreadCountMoveSizeInt() < len(postList) {
-		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Error: the thread is %d posts long, but the move thead command is configured to only move threads of up to %d posts", len(postList), config.MaxThreadCountMoveSizeInt())), true, nil
+	if config.MaxThreadCountMoveSizeInt() != 0 && config.MaxThreadCountMoveSizeInt() < wpl.NumPosts() {
+		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Error: the thread is %d posts long, but the move thead command is configured to only move threads of up to %d posts", wpl.NumPosts(), config.MaxThreadCountMoveSizeInt())), true, nil
 	}
 
-	if postList[0].ChannelId != extra.ChannelId {
+	if wpl.Posts[0].ChannelId != extra.ChannelId {
 		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Error: the move command must be run from the channel containing the post"), true, nil
 	}
 
@@ -90,11 +90,11 @@ func (p *Plugin) runMoveThreadCommand(args []string, extra *model.CommandArgs) (
 
 	// Cleanup is handled by simply deleting the root post. Any comments/replies
 	// are automatically marked as deleted for us.
-	cleanupID := postList[0].Id
+	cleanupID := wpl.Posts[0].Id
 
 	var newRootPost *model.Post
 
-	for i, post := range postList {
+	for i, post := range wpl.Posts {
 		if i == 0 {
 			cleanPost(post)
 			post.ChannelId = channelID
@@ -132,27 +132,7 @@ func (p *Plugin) runMoveThreadCommand(args []string, extra *model.CommandArgs) (
 		return nil, false, errors.Wrap(appErr, "unable to delete post")
 	}
 
-	msg := fmt.Sprintf("A thread with %d posts has been moved [ team=%s, channel=%s ]", len(postList), targetTeam.Name, targetChannel.Name)
+	msg := fmt.Sprintf("A thread with %d posts has been moved [ team=%s, channel=%s ]", wpl.NumPosts(), targetTeam.Name, targetChannel.Name)
 
 	return getCommandResponse(model.COMMAND_RESPONSE_TYPE_IN_CHANNEL, msg), false, nil
-}
-
-func sortedPostsFromPostList(postList *model.PostList) []*model.Post {
-	postList.UniqueOrder()
-	postList.SortByCreateAt()
-	posts := postList.ToSlice()
-
-	var reversedPosts []*model.Post
-	for i := range posts {
-		reversedPosts = append(reversedPosts, posts[len(posts)-i-1])
-	}
-
-	return reversedPosts
-}
-
-func cleanPost(post *model.Post) {
-	post.Id = ""
-	post.CreateAt = 0
-	post.UpdateAt = 0
-	post.EditAt = 0
 }
